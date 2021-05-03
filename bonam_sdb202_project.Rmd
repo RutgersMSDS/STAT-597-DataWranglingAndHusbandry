@@ -2,7 +2,9 @@
 title: "World Happiness Report 2021 Analysis"
 author: "Harshini Bonam (sdb202)"
 date: "4/26/2021"
-output: html_document
+output:
+  html_document: default
+  pdf_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -82,14 +84,18 @@ library(ggalt)             # Dumble plot
 ## 
 
 ```{r helper, echo=FALSE}
+
+# Function to get column names that have missing values.
 get_na_colnames = function(df) {
   colnames(df)[unlist(lapply(df, function(x) any(is.na(x))))]
 }
 
+# Function to impute the mean of the column range and fill the missing value.
 impute_mean = function(x) {
   replace(x, is.na(x), mean(x, na.rm = TRUE))
 } 
 
+# Function to generate a donut plot.
 donut_plot = function(df, title = '', subtitle = '', caption = '') {
   ggplot(df) +
     geom_rect(aes(ymax = 1, ymin = 0, xmax = 2, xmin=1.2, fill = "base"))  +
@@ -111,7 +117,7 @@ donut_plot = function(df, title = '', subtitle = '', caption = '') {
 
 ## Data Wrangling
 
-Load the data as tibbles
+Load the data as tibbles.
 
 ```{r datawrangling, echo=TRUE}
 
@@ -184,8 +190,15 @@ df_prev = df_prev_raw %>%
       Healthy.life.expectancy = Healthy.life.expectancy.at.birth
     )
 
+# Now let's see how much we improved on filling missing values.
 colMeans(is.na(df_prev))
 
+#reduced by
+colMeans(is.na(df_prev_raw %>% select(Country.name, year, Log.GDP.per.capita, Social.support,
+           Healthy.life.expectancy.at.birth, Freedom.to.make.life.choices,
+           Generosity, Perceptions.of.corruption, Life.Ladder))) - colMeans(is.na(df_prev))
+
+# Improved common column names
 common_colnames = intersect(colnames(df_2021_raw), colnames(df_prev))
 common_colnames
 
@@ -204,34 +217,16 @@ df_total_ladder_wider  = df_total %>%
   select(Country.name, year, Ladder.score) %>%
   pivot_wider(names_from = year, values_from = Ladder.score)
 
-df_total_gdp_wider  = df_total %>% 
-  select(Country.name, year, Logged.GDP.per.capita) %>%  
-  pivot_wider(names_from = year, values_from = Logged.GDP.per.capita)
-
-df_total_ss_wider  = df_total %>% 
-  select(Country.name, year, Social.support) %>%  
-  pivot_wider(names_from = year, values_from = Social.support)
-
-df_total_le_wider  = df_total %>% 
-  select(Country.name, year, Healthy.life.expectancy) %>%  
-  pivot_wider(names_from = year, values_from = Healthy.life.expectancy)
-
-df_total_freedom_wider  = df_total %>% 
-  select(Country.name, year, Freedom.to.make.life.choices) %>%  
-  pivot_wider(names_from = year, values_from = Freedom.to.make.life.choices)
-
-df_total_generosity_wider  = df_total %>%
-  select(Country.name, year, Generosity) %>%  
-  pivot_wider(names_from = year, values_from = Generosity)
-
-df_total_corruption_wider  = df_total %>%
-  select(Country.name, year, Perceptions.of.corruption) %>%  
-  pivot_wider(names_from = year, values_from = Perceptions.of.corruption)
-
 ```
 
 
 ## Data Analysis
+
+We cleansed the data for some basic data analysis like to find out the following:
+> Top 10 happiest countries in 2021
+> Least 10 happiest countries in 2021
+> Region wise happiness concentration in 2021
+
 
 ```{r datanalysis}
 
@@ -241,6 +236,8 @@ dimensions = c('Ladder.score', 'Logged.GDP.per.capita', 'Social.support',
                 'Generosity', 'Perceptions.of.corruption')
 
 
+# Transform the dataset to longer structure, like
+# country, dimension, score
 df_2021_long = df_2021 %>% 
     select(country = Country.name, all_of(dimensions)) %>%
     mutate(absence_of_corruption = 1 - Perceptions.of.corruption) %>%
@@ -249,7 +246,9 @@ df_2021_long = df_2021 %>%
       names_to = 'dimension', values_to = 'score') %>%
     filter(dimension != "Perceptions.of.corruption")
 
+head(df_2021, n = 5)
 
+# Compute the percentage of the dimensional score for each country
 df_2021_tranformed = df_2021_long %>%
     group_by(dimension) %>%
     mutate(min_value = min(score),
@@ -372,7 +371,9 @@ ggplot(
     legend.position = 'None')
 ```
 
-## World happiness br regions
+## World happiness by regions
+
+
 
 ```{r world_regions}
 # map country to regions
@@ -382,7 +383,13 @@ country_region_dict = df_2021 %>%
     region = Regional.indicator) %>% 
   unique()
 
+head(country_region_dict)
 
+# Using the transformed data for 2021 which has the format
+# country, dimension, score, min, max, percentage and region
+# Let's plot only the Ladder score for each country and group them by regions
+# We saw that the min score is above 2 and max score is less than 8
+# Hence let's add a new column that tells us the bucket where score falls into...
 df_region_happiness = df_2021_tranformed %>%
     filter(dimension == 'Ladder.score') %>%
     left_join(country_region_dict, by = 'country') %>%
@@ -395,6 +402,7 @@ df_region_happiness = df_2021_tranformed %>%
     arrange(score_bin, n)
 
 score_levels = levels(df_region_happiness$score_bin)
+head(score_levels)
 ```
 
 ```{r datavisualization_world_regions,  echo=FALSE, fig.width=18, fig.height=12}
@@ -459,8 +467,7 @@ df_2019_2020 = df_prev %>%
     filter(year >= 2019) %>%
     left_join(
       country_region_dict,
-      by = c('Country.name' = 'country')
-      ) %>%
+      by = c('Country.name' = 'country')) %>%
     select(
       country = Country.name,
       region,
@@ -598,6 +605,9 @@ ggplot() +
 ## Countries with increased happiness
 
  Let's see how many countries increased happiness from 2019->2020.
+ For this analysis, we have to fill the missing values for the years 2018-2020.
+ In this project, mean of the score of each country is replaced into the missing
+ values.
 
 ```{r increasedhappiness} 
 
@@ -635,7 +645,7 @@ df_increase_in_2019_2020 = df_countries_increased_happiness %>%
   summarize(pct = mean(increase, na.rm = TRUE))
 ```
 
-```{r datavisualization_increasedhappiness, echo=FALSE, fig.width=12, fig.height=6}
+```{r datavisualization_increasedhappiness, echo=FALSE, fig.width=12, fig.height=8}
 
 p1 = donut_plot(df_increase_in_2019,
                 title = '2018 ==> 2019')
@@ -670,7 +680,8 @@ p4 = donut_plot(df_increase_in_2019_2020,
 
 plot_grid(
   p3, p4,
-  ncol = 1
+  ncol = 1,
+  rel_heights = c(0.6, 0.4)
 )
 
 
@@ -810,7 +821,3 @@ ref: https://happiness-report.s3.amazonaws.com/2021/Appendix1WHR2021C2.pdf
 
 - Corruption Perception
 > The measure is the national average of the survey responses to two questions in the GWP: “Is corruption widespread throughout the government or not” and “Is corruption widespread within businesses or not?” The overall perception is just the average of the two 0-or-1 responses. In case the perception of government corruption is missing, we use the perception of business corruption as the overall perception.
-
-```{r report, echo=TRUE}
-
-```
