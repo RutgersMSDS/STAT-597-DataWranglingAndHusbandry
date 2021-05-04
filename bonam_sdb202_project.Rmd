@@ -1,36 +1,23 @@
 ---
 title: "World Happiness Report 2021 Analysis"
+subtitle: "STAT-597: Data Wrangling and Husbandry"
 author: "Harshini Bonam (sdb202)"
+url: "https://github.com/RutgersMSDS/STAT-597-DataWranglingAndHusbandry"
 date: "4/26/2021"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Summary
-
-This notebook illustrates data storytelling with the World Happiness Report (2021) data.
-
-Three insights:
-
-(1) The happiness regions in the world are North America and Western Europe.
-(2) Despite Covid-19, about half of the countries in the world still see an increase in happiness from 2019 to 2020.
-
-(3) Three top drivers of happiness:
-    (a.) Wealth
-    (b.) Health
-    (c.) Social support
-    
-    
-## Background
+## Introduction
 
 World Happiness Report (ref: https://worldhappiness.report/faq/)
 
-World Happiness Report 2021 use data that come from the Gallup World Poll surveys from 2018 to 2020 which is a publication of the United Nations Sustainable Development Solutions Network.
+World Happiness Report 2021 use data that come from the Gallup World Poll surveys from 2005 to 2020 which is a publication of the United Nations Sustainable Development Solutions Network.
 
 They are based on answers to the main life evaluation question asked in the poll. This is called the Cantril ladder: it asks respondents to think of a ladder, with the best possible life for them being a 10, and the worst possible life being a 0. 
 
@@ -44,7 +31,7 @@ list_of_packages <- c(
   "tidyverse", "reshape2", "tidytext", "stringr", "modelr", "purrr", "tidyr",
   "rvest", "dplyr", "broom",
   
-  "choroplethrMaps", "RColorBrewer", "ggchicklet", "cowplot",
+  "extrafont", "choroplethrMaps", "RColorBrewer", "ggchicklet", "cowplot",
   "GGally", "ggalt"
   )
 
@@ -54,6 +41,7 @@ if(length(new.packages)) install.packages(new_packages)
 remotes::install_github("martinctc/rwa")
 install.packages("waffle", repos = "https://cinc.rud.is")
 install.packages("hrbrthemes", repos = c("https://cinc.rud.is", "https://cloud.r-project.org/"))
+extrafont::loadfonts(quiet=TRUE)
 
 # data wrangling libraries
 library(tidyverse)
@@ -246,7 +234,7 @@ df_2021_long = df_2021 %>%
       names_to = 'dimension', values_to = 'score') %>%
     filter(dimension != "Perceptions.of.corruption")
 
-head(df_2021, n = 5)
+head(df_2021_long, n = 5)
 
 # Compute the percentage of the dimensional score for each country
 df_2021_tranformed = df_2021_long %>%
@@ -255,6 +243,8 @@ df_2021_tranformed = df_2021_long %>%
              max_value = max(score)) %>%
     mutate(score_pct = (score-min_value)/(max_value-min_value)) %>%
     ungroup()
+
+head(df_2021_tranformed, n = 5)
 
 ```
 
@@ -272,7 +262,8 @@ df_2021_top10 = df_2021_tranformed %>%
 
 ```
 
-```{r datavisualization_top_10, echo=FALSE, fig.width=12, fig.height=8}
+```{r datavisualization_top_10, echo=FALSE, fig.width=12, fig.height=10, results="hide"}
+
 ggplot(
   df_2021_top10,
   aes(x = reorder(country_label, score))
@@ -286,27 +277,35 @@ ggplot(
     aes(y = score, fill = score), 
     width = 0.618, 
     radius = grid::unit(10, "pt")) +
-  geom_text(
-    aes(y = score),
-    label = round(df_2021_top10$score,2),
-    nudge_y = 0.4,
-    size = 6) + 
+  
   scale_y_continuous(
     expand = c(0, 0.1), 
     position = "right", 
     limits = c(0, 10)) +
+  
   scale_fill_gradient2(
     low = 'black', 
     high = '#7FB185', 
     mid = 'white', 
     midpoint = 5) + 
+  
   coord_flip() +
+  
+  geom_text(
+    aes(y = score),
+    label = round(df_2021_top10$score,2),
+    nudge_y = 0.4,
+    size = 6) + 
+  
   labs(
-    y="Happiest possible score = 10", x = '',
+    y="Happiest possible score = 10",
+    x = '',
     title="10 Happiest Countries in the World",
     subtitle="Nine of the happinest countries are in Europe",
     caption="Source: The World Happiness Report 2021") + 
-  theme_ipsum(grid = '') +
+ 
+  theme_ipsum(grid = '', ) +
+  
   theme(plot.title = element_text(size=24, hjust = 0.5),
         plot.subtitle = element_text(size = 20, hjust = 0.5),
         plot.caption = element_text(size = 15),
@@ -402,7 +401,7 @@ df_region_happiness = df_2021_tranformed %>%
     arrange(score_bin, n)
 
 score_levels = levels(df_region_happiness$score_bin)
-head(score_levels)
+
 ```
 
 ```{r datavisualization_world_regions,  echo=FALSE, fig.width=18, fig.height=12}
@@ -461,7 +460,7 @@ ggplot(
 
 ## Happiness under Covid-19 during 2019 and 2020
 
-```{r datavisualization_covid, echo=FALSE, fig.width=18, fig.height=12}
+```{r covid}
 
 df_2019_2020 = df_prev %>% 
     filter(year >= 2019) %>%
@@ -486,6 +485,8 @@ df_2019_2020 = df_prev %>%
     arrange(diff) %>%
     mutate(region = factor(region, levels = region))
 
+```
+```{r datavisualization_covid, echo=FALSE, fig.width=18, fig.height=12}
 ggplot() + 
   
   geom_dumbbell(
@@ -686,8 +687,68 @@ plot_grid(
 
 
 ```
+```{r more_increased_countries, echo=FALSE, fig.width=18, fig.height=12}
+df_regions_increased_happiness = df_countries_increased_happiness %>%
+    filter(increase_in_2019&increase_in_2020) %>% 
+    left_join(country_region_dict, by = 'country') %>%
+    mutate(score_bin = cut(year2020, seq(2,8, 1), right = FALSE)) %>%
+    group_by(region) %>%
+    mutate(region_avg = mean(year2020)) %>%
+    ungroup() %>%
+    mutate(region = reorder(region, region_avg)) %>%
+    count(region, score_bin) %>%
+    arrange(score_bin, n)
 
-## Correlatoin Matrix
+pal <- colorRampPalette(c("black", "white", "#7FB185"))
+
+ggplot(
+  df_regions_increased_happiness,
+  aes(fill = score_bin, values = n)) +
+  geom_waffle(
+    color = "white",
+    size = .25,
+    n_rows = 6,
+    flip = TRUE) +
+  facet_wrap(
+    ~region,
+    nrow =2,
+    strip.position = "bottom",
+    labeller = label_wrap_gen()) +
+  scale_x_discrete() + 
+  scale_y_continuous(labels = function(x) x * 6, # This multiplier is same as n_rows
+                     expand = c(0,0.2),
+                     limits = c(0, 7)) +
+  scale_fill_manual(
+    name = "Green indicates more happiness",
+    values = pal(6),
+    labels = c('','','','','','')
+  ) +
+  coord_equal() +
+  labs(
+    title = "Increasing Happiness by World Region in 2018-2020",
+    caption = "1 square = a country\n\nSource: The World Happiness Report 2021",
+    y = "Country Count"
+  ) +
+  theme_ipsum(
+    grid = '') +
+  theme(plot.title = element_text(size=26, hjust = 0.5),
+        plot.subtitle = element_text(size = 20, hjust = 0.5),
+        plot.caption = element_text(size = 15),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 18, hjust = 0.5),
+        axis.text.x = element_text(size = 18),
+        axis.text.y = element_blank(),
+        strip.text.x = element_text(size = 18, hjust = 0.5),
+        legend.position = c(0.85, 1),
+        legend.box = 'horizontal',
+        legend.key.size = unit(1,'cm'),
+        legend.title = element_text(size = 18, hjust = 1),
+        legend.text = element_text(size = 16)) +
+  guides(
+    fill = guide_legend(reverse = FALSE, nrow = 1, byrow = TRUE))
+
+```
+## Correlation Matrix
 
 Let's see which factors most strongly correlate with happiness.
 
